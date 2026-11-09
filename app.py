@@ -22,12 +22,11 @@ def clean_records(df):
                 clean[k] = v
         out.append(clean)
     return out
-
 @app.get("/search")
 async def dynamic_search(
-    field: str = Query(...),
-    value: str = Query(...),
-    key: str = Query(...),
+    field: str = Query(..., description="Column to search"),
+    value: str = Query(..., description="The value to search for"),
+    key: str = Query(..., description="Your API key"),
 ):
     if key != MASTER_KEY:
         raise HTTPException(status_code=401, detail="ACCESS_DENIED")
@@ -38,21 +37,25 @@ async def dynamic_search(
 
     con = None
     try:
-        # --- MOVE INITIALIZATION INSIDE THE ENDPOINT ---
         con = duckdb.connect()
         con.execute("SET home_directory = '/tmp';")
         con.execute("INSTALL httpfs;")
         con.execute("LOAD httpfs;")
         
-        query = f"SELECT * FROM read_parquet('{BUCKET_PATH}') WHERE {field} = ? LIMIT 10"
-        df = con.execute(query, [value]).fetchdf()
+        # THE FIX: Using ILIKE (Case-Insensitive) and wildcards (%) for partial matching
+        # If searching for Aadhar, we still want exact match to avoid getting multiple people.
+        if field == "aadharNumber":
+            query = f"SELECT * FROM read_parquet('{BUCKET_PATH}') WHERE {field} = ? LIMIT 10"
+            df = con.execute(query, [value]).fetchdf()
+        else:
+            query = f"SELECT * FROM read_parquet('{BUCKET_PATH}') WHERE {field} ILIKE ? LIMIT 10"
+            df = con.execute(query, [f"%{value}%"]).fetchdf()
         
         if df.empty:
-            return {"message": "NO_DATA_FOUND"}
+            return {"message": "NO_DATA_FOUND", "field": field, "value": value}
         return clean_records(df)
         
     except Exception as e:
-        # This will now return a JSON error instead of crashing the server
         raise HTTPException(status_code=500, detail=f"QUERY_FAILED: {str(e)}")
         
     finally:
