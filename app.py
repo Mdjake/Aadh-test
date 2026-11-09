@@ -78,9 +78,8 @@ async def search_by_aadhar(
     if not validate_key(key):
         raise HTTPException(status_code=401, detail="ACCESS_DENIED: Invalid or expired API key")
 
-    # ⚠️ IMPORTANT: If the column name in the parquet file is not 'aadhar_number', 
-    # change it below! Use the /debug-schema endpoint to check.
-    query = f"SELECT * FROM read_parquet('{BUCKET_PATH}') WHERE aadhar_number = ? LIMIT 10"
+    # ⚠️ FIXED: Changed to 'aadharNumber' to match the exact schema
+    query = f"SELECT * FROM read_parquet('{BUCKET_PATH}') WHERE aadharNumber = ? LIMIT 10"
     
     try:
         df = con.execute(query, [aadhar]).fetchdf()
@@ -89,7 +88,6 @@ async def search_by_aadhar(
         return clean_records(df)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"QUERY_FAILED: {str(e)}")
-
 # ---------------- SCHEMA DEBUG (Use this first!) ----------------
 @app.get("/debug-schema")
 async def debug_schema():
